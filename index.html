@@ -20,7 +20,6 @@
     --text-muted: #7A6548;
     --accent:     #2D5016;
     --accent2:    #4A7C28;
-    --accent-alt: #8B4513;
     --gold:       #B8860B;
     --gold-lt:    #D4A017;
     --red:        #8B1A1A;
@@ -31,7 +30,6 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   html { scroll-behavior: smooth; }
 
   body {
@@ -42,19 +40,16 @@
     overflow-x: hidden;
   }
 
-  /* ── DECORATIVE TOP BAR ── */
   .topbar {
     height: 5px;
     background: linear-gradient(90deg, var(--accent) 0%, var(--gold) 50%, var(--accent) 100%);
   }
 
-  /* ── HEADER ── */
   header {
     background: var(--bg-card);
     border-bottom: 2px solid var(--border);
     padding: 36px 24px 28px;
     text-align: center;
-    position: relative;
     box-shadow: var(--shadow);
   }
 
@@ -76,12 +71,9 @@
     line-height: 1.2;
   }
 
-  header h1 span {
-    color: var(--accent);
-  }
+  header h1 span { color: var(--accent); }
 
   .header-sub {
-    font-family: 'Lato', sans-serif;
     font-size: 14px;
     color: var(--text-muted);
     letter-spacing: 3px;
@@ -89,14 +81,13 @@
     margin-top: 8px;
   }
 
-  /* ── MAIN CONTAINER ── */
   .container {
     max-width: 860px;
     margin: 0 auto;
     padding: 48px 24px 80px;
   }
 
-  /* ── SECTION HEADING ── */
+  /* ── SECTION LABEL ── */
   .section-label {
     font-family: 'Playfair Display', serif;
     font-size: 22px;
@@ -133,21 +124,20 @@
     flex-shrink: 0;
   }
 
-  /* ── SURAH SELECTOR ── */
-  #step-select {
+  /* ── CARDS ── */
+  .step-card {
     background: var(--bg-card);
     border: 2px solid var(--border);
     border-radius: var(--radius);
-    padding: 28px 28px 24px;
+    padding: 28px;
     box-shadow: var(--shadow);
-    margin-bottom: 36px;
+    margin-bottom: 28px;
   }
 
-  .select-wrapper {
-    position: relative;
-  }
+  /* ── SURAH DROPDOWN ── */
+  .select-wrapper { position: relative; }
 
-  #surahDropdown {
+  .styled-select {
     width: 100%;
     padding: 14px 48px 14px 18px;
     font-family: 'Lato', sans-serif;
@@ -163,7 +153,7 @@
     transition: border-color 0.2s, box-shadow 0.2s;
   }
 
-  #surahDropdown:focus {
+  .styled-select:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(45,80,22,0.12);
   }
@@ -178,21 +168,160 @@
     font-size: 20px;
   }
 
-  /* ── SURAH DISPLAY ── */
-  #step-surah {
-    background: var(--bg-card);
+  /* ── VERSE RANGE CARD ── */
+  #step-verse-range {
+    display: none;
+    animation: fadeSlideIn 0.35s ease;
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .verse-range-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+    line-height: 1.6;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--gold);
+  }
+
+  .verse-range-hint strong { color: var(--text-dark); }
+
+  .verse-inputs-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .verse-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .verse-input-group label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .verse-input {
+    padding: 12px 16px;
+    font-family: 'Lato', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-dark);
+    background: var(--bg-alt);
     border: 2px solid var(--border);
     border-radius: var(--radius);
-    padding: 28px;
-    box-shadow: var(--shadow);
-    margin-bottom: 36px;
-    display: none;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
   }
+
+  .verse-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(45,80,22,0.12);
+  }
+
+  .verse-input::placeholder { color: var(--border); font-weight: 400; font-size: 15px; }
+
+  .verse-range-sep {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: var(--text-muted);
+    padding-top: 20px;
+    flex-shrink: 0;
+  }
+
+  .verse-range-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-apply-range {
+    padding: 11px 28px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Lato', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-apply-range:hover { background: var(--accent2); transform: translateY(-1px); }
+
+  .btn-clear-range {
+    padding: 11px 24px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'Lato', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-clear-range:hover { border-color: var(--red); color: var(--red); }
+
+  .verse-range-error {
+    color: var(--red);
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 8px;
+    min-height: 18px;
+  }
+
+  /* Active range badge */
+  .range-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-top: 12px;
+  }
+
+  .range-active-badge .badge-x {
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 15px;
+    line-height: 1;
+    transition: opacity 0.15s;
+  }
+
+  .range-active-badge .badge-x:hover { opacity: 1; }
+
+  /* ── SURAH DISPLAY ── */
+  #step-surah { display: none; }
 
   .surah-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     margin-bottom: 20px;
     flex-wrap: wrap;
   }
@@ -212,7 +341,12 @@
     padding: 4px 14px;
     border-radius: 20px;
     border: 1px solid var(--border);
-    letter-spacing: 0.5px;
+  }
+
+  .surah-meta-pill.range-pill {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
   }
 
   .surah-arabic-box {
@@ -248,21 +382,16 @@
     font-family: 'Lato', sans-serif;
     font-size: 12px;
     font-weight: 700;
-    margin-right: 6px;
+    margin-right: 4px;
     vertical-align: middle;
     flex-shrink: 0;
   }
 
   /* ── RECORDING ── */
   #step-record {
-    background: var(--bg-card);
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
-    padding: 36px 28px;
-    box-shadow: var(--shadow);
-    margin-bottom: 36px;
     display: none;
     text-align: center;
+    padding: 36px 28px;
   }
 
   .record-row {
@@ -288,33 +417,22 @@
     gap: 6px;
     transition: all 0.2s;
     box-shadow: 0 4px 16px rgba(45,80,22,0.15);
-    position: relative;
-    overflow: hidden;
   }
 
-  .btn-record:hover {
-    background: var(--accent);
-    transform: scale(1.05);
-  }
-
+  .btn-record:hover { background: var(--accent); transform: scale(1.05); }
   .btn-record:hover svg { stroke: #fff; }
   .btn-record:hover .btn-record-label { color: #fff; }
 
   .btn-record svg {
-    width: 32px;
-    height: 32px;
-    stroke: var(--accent);
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
+    width: 32px; height: 32px;
+    stroke: var(--accent); fill: none;
+    stroke-width: 2; stroke-linecap: round;
     transition: stroke 0.2s;
   }
 
   .btn-record-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 0.5px;
+    font-size: 11px; font-weight: 700;
+    color: var(--accent); letter-spacing: 0.5px;
     transition: color 0.2s;
   }
 
@@ -343,7 +461,6 @@
     font-weight: 700;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    letter-spacing: 0.5px;
     display: none;
   }
 
@@ -355,7 +472,6 @@
     font-weight: 700;
     color: var(--accent);
     min-height: 24px;
-    letter-spacing: 0.3px;
   }
 
   .status-msg.analyzing { color: var(--gold); }
@@ -376,10 +492,38 @@
     display: none;
   }
 
-  /* ── RESULTS ── */
-  #step-results {
-    display: none;
+  /* ── WAVEFORM ── */
+  .wave-bars {
+    display: flex; align-items: flex-end;
+    gap: 4px; height: 36px; margin: 0 auto;
   }
+
+  .wave-bar {
+    width: 5px; background: var(--accent);
+    border-radius: 3px;
+    animation: wave-anim 1s ease-in-out infinite;
+    opacity: 0.35;
+  }
+
+  .wave-bar:nth-child(1){animation-delay:0s;height:40%}
+  .wave-bar:nth-child(2){animation-delay:.1s;height:70%}
+  .wave-bar:nth-child(3){animation-delay:.2s;height:100%}
+  .wave-bar:nth-child(4){animation-delay:.3s;height:60%}
+  .wave-bar:nth-child(5){animation-delay:.4s;height:80%}
+  .wave-bar:nth-child(6){animation-delay:.3s;height:60%}
+  .wave-bar:nth-child(7){animation-delay:.2s;height:100%}
+  .wave-bar:nth-child(8){animation-delay:.1s;height:70%}
+  .wave-bar:nth-child(9){animation-delay:0s;height:40%}
+
+  .wave-bars.active .wave-bar { opacity: 1; }
+
+  @keyframes wave-anim {
+    0%,100%{transform:scaleY(0.4)}
+    50%{transform:scaleY(1)}
+  }
+
+  /* ── RESULTS ── */
+  #step-results { display: none; }
 
   .result-card {
     background: var(--bg-card);
@@ -392,8 +536,7 @@
 
   .result-card h3 {
     font-family: 'Playfair Display', serif;
-    font-size: 20px;
-    font-weight: 700;
+    font-size: 20px; font-weight: 700;
     color: var(--text-dark);
     margin-bottom: 18px;
     padding-bottom: 12px;
@@ -402,146 +545,98 @@
 
   .match-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
   }
 
   .match-item {
     background: var(--surface);
     border-radius: var(--radius);
-    padding: 16px 18px;
+    padding: 14px 16px;
     border: 1px solid var(--border);
   }
 
   .match-item .mi-label {
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 11px; font-weight: 700;
     color: var(--text-muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
+    letter-spacing: 2px; text-transform: uppercase;
     margin-bottom: 6px;
   }
 
   .match-item .mi-value {
     font-family: 'Playfair Display', serif;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent);
+    font-size: 18px; font-weight: 700; color: var(--accent);
   }
 
   .match-item .mi-value.arabic {
     font-family: 'Amiri', serif;
-    font-size: 22px;
-    direction: rtl;
-    text-align: right;
+    font-size: 22px; direction: rtl; text-align: right;
   }
 
-  /* Accuracy Score */
   .accuracy-score-row {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    margin-bottom: 22px;
-    flex-wrap: wrap;
+    display: flex; align-items: center;
+    gap: 20px; margin-bottom: 22px; flex-wrap: wrap;
   }
 
   .score-circle {
-    width: 90px;
-    height: 90px;
-    border-radius: 50%;
+    width: 90px; height: 90px; border-radius: 50%;
     background: conic-gradient(var(--accent) 0%, transparent 0%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    flex-shrink: 0;
+    display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0;
   }
 
   .score-circle-inner {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
+    width: 70px; height: 70px; border-radius: 50%;
     background: var(--bg-card);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
+    display: flex; align-items: center;
+    justify-content: center; flex-direction: column;
   }
 
   .score-pct {
     font-family: 'Playfair Display', serif;
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
+    font-size: 22px; font-weight: 700;
+    color: var(--accent); line-height: 1;
   }
 
   .score-label-sm {
-    font-size: 9px;
-    color: var(--text-muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    font-size: 9px; color: var(--text-muted);
+    letter-spacing: 1px; text-transform: uppercase;
   }
 
-  .score-desc {
-    font-size: 15px;
-    color: var(--text-mid);
-    line-height: 1.7;
-  }
+  .score-desc { font-size: 15px; color: var(--text-mid); line-height: 1.7; }
 
-  /* Verse comparison */
   .verse-compare {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 22px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 22px;
   }
 
-  @media(max-width: 580px) {
-    .verse-compare { grid-template-columns: 1fr; }
-  }
+  @media(max-width: 580px) { .verse-compare { grid-template-columns: 1fr; } }
 
   .verse-box {
     background: var(--bg-alt);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 18px;
-    direction: rtl;
-    text-align: right;
+    direction: rtl; text-align: right;
     font-family: 'Amiri', serif;
-    font-size: 20px;
-    line-height: 2.2;
-    color: var(--text-dark);
+    font-size: 20px; line-height: 2.2; color: var(--text-dark);
   }
 
   .verse-box-label {
-    font-family: 'Lato', sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    text-align: left;
-    direction: ltr;
-    margin-bottom: 10px;
+    font-size: 11px; font-weight: 700;
+    color: var(--text-muted); letter-spacing: 2px;
+    text-transform: uppercase; text-align: left;
+    direction: ltr; margin-bottom: 10px;
   }
 
-  /* Word table */
-  .word-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 15px;
-  }
+  .word-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 
   .word-table th {
-    background: var(--accent);
-    color: #fff;
+    background: var(--accent); color: #fff;
     padding: 12px 16px;
     font-family: 'Lato', sans-serif;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
   }
 
   .word-table th:first-child { border-radius: 8px 0 0 0; }
@@ -558,9 +653,7 @@
 
   .word-table .arabic-cell {
     font-family: 'Amiri', serif;
-    font-size: 20px;
-    direction: rtl;
-    text-align: right;
+    font-size: 20px; direction: rtl; text-align: right;
   }
 
   .word-table .acc-cell { text-align: center; font-weight: 700; }
@@ -570,75 +663,53 @@
   .acc-low   { color: var(--red); }
   .word-miss { color: var(--red); font-style: italic; }
 
-  .acc-bar-wrap {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+  .acc-bar-wrap { display: flex; align-items: center; gap: 10px; }
 
   .acc-bar {
-    flex: 1;
-    height: 8px;
-    background: var(--surface);
-    border-radius: 4px;
-    overflow: hidden;
+    flex: 1; height: 8px;
+    background: var(--surface); border-radius: 4px; overflow: hidden;
   }
 
   .acc-bar-fill {
-    height: 100%;
-    border-radius: 4px;
+    height: 100%; border-radius: 4px;
     transition: width 0.6s ease;
   }
 
   /* ── ACTION BUTTONS ── */
   .action-row {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-top: 8px;
+    display: flex; gap: 16px;
+    justify-content: center; flex-wrap: wrap; margin-top: 8px;
   }
 
   .btn-primary {
     padding: 14px 36px;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius);
+    background: var(--accent); color: #fff;
+    border: none; border-radius: var(--radius);
     font-family: 'Lato', sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.5px;
     transition: background 0.2s, transform 0.1s;
-    letter-spacing: 0.5px;
   }
 
   .btn-primary:hover { background: var(--accent2); transform: translateY(-2px); }
 
   .btn-secondary {
     padding: 14px 36px;
-    background: transparent;
-    color: var(--text-dark);
-    border: 2px solid var(--text-dark);
-    border-radius: var(--radius);
+    background: transparent; color: var(--text-dark);
+    border: 2px solid var(--text-dark); border-radius: var(--radius);
     font-family: 'Lato', sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.5px;
     transition: all 0.2s;
-    letter-spacing: 0.5px;
   }
 
   .btn-secondary:hover {
-    background: var(--text-dark);
-    color: var(--bg);
-    transform: translateY(-2px);
+    background: var(--text-dark); color: var(--bg); transform: translateY(-2px);
   }
 
   /* ── THANK YOU ── */
   #step-thankyou {
-    display: none;
-    text-align: center;
+    display: none; text-align: center;
     padding: 60px 20px;
     background: var(--bg-card);
     border: 2px solid var(--border);
@@ -647,115 +718,62 @@
   }
 
   #step-thankyou .ty-arabic {
-    font-family: 'Amiri', serif;
-    font-size: 32px;
-    color: var(--accent);
-    direction: rtl;
-    margin-bottom: 16px;
+    font-family: 'Amiri', serif; font-size: 32px;
+    color: var(--accent); direction: rtl; margin-bottom: 16px;
   }
 
   #step-thankyou h2 {
     font-family: 'Playfair Display', serif;
-    font-size: 32px;
-    color: var(--text-dark);
-    margin-bottom: 12px;
+    font-size: 32px; color: var(--text-dark); margin-bottom: 12px;
   }
 
   #step-thankyou p {
-    color: var(--text-muted);
-    font-size: 17px;
-    margin-bottom: 32px;
+    color: var(--text-muted); font-size: 17px; margin-bottom: 32px;
   }
 
-  /* ── DIVIDER ── */
   .divider {
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--border), transparent);
-    margin: 36px 0;
+    margin: 32px 0;
   }
 
-  /* ── SPINNER ── */
-  .spinner {
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    border: 3px solid rgba(45,80,22,0.2);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    vertical-align: middle;
-    margin-right: 8px;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── LOADING OVERLAY ── */
+  /* ── LOADING ── */
   #loadingOverlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(245,240,232,0.85);
+    position: fixed; inset: 0;
+    background: rgba(245,240,232,0.88);
     z-index: 999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
+    display: flex; align-items: center;
+    justify-content: center; flex-direction: column;
     gap: 16px;
     font-family: 'Playfair Display', serif;
-    font-size: 18px;
-    color: var(--accent);
+    font-size: 18px; color: var(--accent);
   }
 
   #loadingOverlay.hidden { display: none; }
 
-  /* ── WAVEFORM BARS ── */
-  .wave-bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 36px;
-    margin: 0 auto;
+  .spinner {
+    display: inline-block;
+    width: 36px; height: 36px;
+    border: 4px solid rgba(45,80,22,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
   }
 
-  .wave-bar {
-    width: 5px;
-    background: var(--accent);
-    border-radius: 3px;
-    animation: wave-anim 1s ease-in-out infinite;
-    opacity: 0.4;
-  }
-
-  .wave-bar:nth-child(1) { animation-delay: 0s;    height: 40%; }
-  .wave-bar:nth-child(2) { animation-delay: 0.1s;  height: 70%; }
-  .wave-bar:nth-child(3) { animation-delay: 0.2s;  height: 100%; }
-  .wave-bar:nth-child(4) { animation-delay: 0.3s;  height: 60%; }
-  .wave-bar:nth-child(5) { animation-delay: 0.4s;  height: 80%; }
-  .wave-bar:nth-child(6) { animation-delay: 0.3s;  height: 60%; }
-  .wave-bar:nth-child(7) { animation-delay: 0.2s;  height: 100%; }
-  .wave-bar:nth-child(8) { animation-delay: 0.1s;  height: 70%; }
-  .wave-bar:nth-child(9) { animation-delay: 0s;    height: 40%; }
-
-  .wave-bars.active .wave-bar { opacity: 1; }
-
-  @keyframes wave-anim {
-    0%, 100% { transform: scaleY(0.4); }
-    50%       { transform: scaleY(1); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   footer {
     background: var(--bg-card);
     border-top: 2px solid var(--border);
-    text-align: center;
-    padding: 20px;
-    color: var(--text-muted);
-    font-size: 13px;
-    letter-spacing: 1px;
+    text-align: center; padding: 20px;
+    color: var(--text-muted); font-size: 13px; letter-spacing: 1px;
   }
 </style>
 </head>
 <body>
 
 <div id="loadingOverlay">
-  <div class="spinner" style="width:36px;height:36px;border-width:4px;"></div>
+  <div class="spinner"></div>
   <span>Loading Quran Data…</span>
 </div>
 
@@ -769,39 +787,79 @@
 
 <div class="container">
 
-  <!-- STEP 1: SELECT SURAH -->
-  <div id="step-select">
+  <!-- ── STEP 1: SELECT SURAH ── -->
+  <div class="step-card" id="step-select">
     <div class="section-label">
       <span class="step-badge">1</span>
       Select the Surah You Want to Recite
     </div>
     <div class="select-wrapper">
-      <select id="surahDropdown" onchange="onSurahChange()">
+      <select class="styled-select" id="surahDropdown" onchange="onSurahChange()">
         <option value="">— Choose a Surah —</option>
       </select>
       <span class="select-arrow">▾</span>
     </div>
   </div>
 
-  <!-- STEP 2: SURAH DISPLAY -->
-  <div id="step-surah">
+  <!-- ── STEP 2: VERSE RANGE (optional) ── -->
+  <div class="step-card" id="step-verse-range">
     <div class="section-label">
       <span class="step-badge">2</span>
-      Complete Arabic Text of Selected Surah
+      Select Verse Range <span style="font-size:14px;font-weight:400;color:var(--text-muted);margin-left:8px;">(Optional)</span>
+    </div>
+
+    <div class="verse-range-hint">
+      <strong>Optional:</strong> Enter a verse range to practice specific ayahs only.
+      Leave blank to practice the <strong>entire Surah</strong>.
+      Example: From <strong>1</strong> To <strong>7</strong> will show only those verses.
+    </div>
+
+    <div class="verse-inputs-row">
+      <div class="verse-input-group">
+        <label>From Verse</label>
+        <input class="verse-input" type="number" id="verseFrom" min="1" placeholder="e.g. 1" />
+      </div>
+      <div class="verse-range-sep">→</div>
+      <div class="verse-input-group">
+        <label>To Verse</label>
+        <input class="verse-input" type="number" id="verseTo" min="1" placeholder="e.g. 7" />
+      </div>
+    </div>
+
+    <div class="verse-range-error" id="verseRangeError"></div>
+
+    <div class="verse-range-actions">
+      <button class="btn-apply-range" onclick="applyVerseRange()">✓ Apply Range</button>
+      <button class="btn-clear-range" onclick="clearVerseRange()">✕ Show Full Surah</button>
+    </div>
+
+    <div id="rangeActiveBadge" style="display:none;">
+      <span class="range-active-badge">
+        📖 Showing Verses <span id="badgeText"></span>
+        <span class="badge-x" onclick="clearVerseRange()" title="Remove range">✕</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: SURAH TEXT DISPLAY ── -->
+  <div class="step-card" id="step-surah">
+    <div class="section-label">
+      <span class="step-badge">3</span>
+      Arabic Text — Read Before Reciting
     </div>
     <div class="surah-meta">
       <span id="surahMetaName" class="surah-meta-name"></span>
       <span id="surahMetaNum" class="surah-meta-pill"></span>
       <span id="surahMetaAyahs" class="surah-meta-pill"></span>
-      <span id="surahMetaType" class="surah-meta-pill"></span>
+      <span id="surahMetaRange" class="surah-meta-pill range-pill" style="display:none;"></span>
     </div>
     <div id="surahArabicBox" class="surah-arabic-box"></div>
   </div>
 
-  <!-- STEP 3: RECORD -->
-  <div id="step-record">
+  <!-- ── STEP 4: RECORD ── -->
+  <div class="step-card" id="step-record">
     <div class="section-label" style="justify-content:center;">
-      <span class="step-badge">3</span>
+      <span class="step-badge">4</span>
       Recite &amp; Analyze
     </div>
 
@@ -824,7 +882,6 @@
           <div class="wave-bar"></div>
         </div>
       </div>
-
       <button class="btn-analyze" id="btnAnalyze" onclick="analyzeRecitation()">
         🔍 Analyze Recitation
       </button>
@@ -836,10 +893,9 @@
 
   <div class="divider" id="dividerResults" style="display:none;"></div>
 
-  <!-- STEP 4: RESULTS -->
+  <!-- ── STEP 5: RESULTS ── -->
   <div id="step-results">
 
-    <!-- System Match -->
     <div class="result-card">
       <h3>🔎 System Match</h3>
       <div class="match-grid">
@@ -862,10 +918,8 @@
       </div>
     </div>
 
-    <!-- Accuracy -->
     <div class="result-card">
       <h3>📊 Accuracy Analysis</h3>
-
       <div class="accuracy-score-row">
         <div class="score-circle" id="scoreCircle">
           <div class="score-circle-inner">
@@ -873,9 +927,7 @@
             <div class="score-label-sm">Accuracy</div>
           </div>
         </div>
-        <div class="score-desc" id="scoreDesc">
-          Analyzing your recitation against the Quran…
-        </div>
+        <div class="score-desc" id="scoreDesc">Analyzing your recitation…</div>
       </div>
 
       <div class="verse-compare">
@@ -906,7 +958,6 @@
       </div>
     </div>
 
-    <!-- Action Buttons -->
     <div class="action-row">
       <button class="btn-primary" onclick="tryAnotherVerse()">🔄 Try Another Verse / Surah</button>
       <button class="btn-secondary" onclick="endSession()">✓ End Session</button>
@@ -930,14 +981,16 @@
 
 <script>
 const API = 'http://localhost:5000/api';
-let allSurahs = [];
-let currentSurahData = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
-let transcribedText = '';
-let recognition = null;
+
+// ── STATE ──
+let allSurahs       = [];
+let currentSurahData = null;  // full surah object with all ayahs
 let currentSurahNumber = null;
+let activeVerseFrom = null;   // null = no range selected
+let activeVerseTo   = null;
+let recognition     = null;
+let isRecording     = false;
+let transcribedText = '';
 
 // ── INIT ──
 window.addEventListener('DOMContentLoaded', async () => {
@@ -946,9 +999,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('loadingOverlay').classList.add('hidden');
 });
 
+// ── LOAD ALL SURAHS ──
 async function loadSurahs() {
   try {
-    const res = await fetch(`${API}/surahs`);
+    const res  = await fetch(`${API}/surahs`);
     const data = await res.json();
     if (data.success) {
       allSurahs = data.surahs;
@@ -966,68 +1020,168 @@ async function loadSurahs() {
   }
 }
 
+// ── SURAH SELECTED ──
 async function onSurahChange() {
-  const sel = document.getElementById('surahDropdown');
-  const num = parseInt(sel.value);
+  const num = parseInt(document.getElementById('surahDropdown').value);
   if (!num) {
+    document.getElementById('step-verse-range').style.display = 'none';
     document.getElementById('step-surah').style.display = 'none';
     document.getElementById('step-record').style.display = 'none';
     return;
   }
 
   currentSurahNumber = num;
-  document.getElementById('loadingOverlay').classList.remove('hidden');
-  document.getElementById('loadingOverlay').querySelector('span').textContent = 'Loading Surah…';
+  activeVerseFrom    = null;
+  activeVerseTo      = null;
+  clearRangeUI();
+
+  showLoader('Loading Surah…');
 
   try {
-    const res = await fetch(`${API}/surah/${num}`);
+    const res  = await fetch(`${API}/surah/${num}`);
     const data = await res.json();
     if (data.success) {
       currentSurahData = data.surah;
-      renderSurah(data.surah);
+
+      // Populate verse range inputs with valid max
+      document.getElementById('verseFrom').max = data.surah.numberOfAyahs;
+      document.getElementById('verseTo').max   = data.surah.numberOfAyahs;
+      document.getElementById('verseFrom').value = '';
+      document.getElementById('verseTo').value   = '';
+      document.getElementById('verseRangeError').textContent = '';
+
+      // Show verse-range step
+      document.getElementById('step-verse-range').style.display = 'block';
+
+      // Render full surah (no range yet)
+      renderSurahBox(data.surah.ayahs, null, null);
+      updateSurahMeta();
+
+      document.getElementById('step-surah').style.display = 'block';
+      document.getElementById('step-record').style.display = 'block';
+      resetRecordState();
+      hideResults();
+
+      document.getElementById('step-verse-range').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   } catch(e) {
     alert('Failed to load surah. Check backend connection.');
   } finally {
-    document.getElementById('loadingOverlay').classList.add('hidden');
+    hideLoader();
   }
 }
 
-function renderSurah(surah) {
-  document.getElementById('surahMetaName').textContent = `${surah.englishName} — ${surah.name}`;
-  document.getElementById('surahMetaNum').textContent = `Surah ${surah.number}`;
-  document.getElementById('surahMetaAyahs').textContent = `${surah.numberOfAyahs} Verses`;
+// ── APPLY VERSE RANGE ──
+function applyVerseRange() {
+  const errEl  = document.getElementById('verseRangeError');
+  const from   = parseInt(document.getElementById('verseFrom').value);
+  const to     = parseInt(document.getElementById('verseTo').value);
+  const maxAyah = currentSurahData ? currentSurahData.numberOfAyahs : 9999;
 
+  errEl.textContent = '';
+
+  // Validation
+  if (!from && !to) {
+    errEl.textContent = 'Please enter at least one verse number, or click "Show Full Surah".';
+    return;
+  }
+  if (isNaN(from) || isNaN(to)) {
+    errEl.textContent = 'Please enter valid numbers in both fields.';
+    return;
+  }
+  if (from < 1 || to < 1) {
+    errEl.textContent = 'Verse numbers must be 1 or greater.';
+    return;
+  }
+  if (from > maxAyah || to > maxAyah) {
+    errEl.textContent = `This Surah only has ${maxAyah} verses. Please enter a number within range.`;
+    return;
+  }
+  if (from > to) {
+    errEl.textContent = '"From" verse cannot be greater than "To" verse.';
+    return;
+  }
+
+  activeVerseFrom = from;
+  activeVerseTo   = to;
+
+  // Update badge
+  document.getElementById('badgeText').textContent = `${from} – ${to}`;
+  document.getElementById('rangeActiveBadge').style.display = 'block';
+
+  // Re-render surah box with filtered ayahs
+  renderSurahBox(currentSurahData.ayahs, from, to);
+  updateSurahMeta();
+  resetRecordState();
+  hideResults();
+
+  document.getElementById('step-surah').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── CLEAR VERSE RANGE ──
+function clearVerseRange() {
+  activeVerseFrom = null;
+  activeVerseTo   = null;
+  clearRangeUI();
+
+  if (currentSurahData) {
+    renderSurahBox(currentSurahData.ayahs, null, null);
+    updateSurahMeta();
+    resetRecordState();
+    hideResults();
+  }
+}
+
+function clearRangeUI() {
+  document.getElementById('verseFrom').value = '';
+  document.getElementById('verseTo').value   = '';
+  document.getElementById('verseRangeError').textContent = '';
+  document.getElementById('rangeActiveBadge').style.display = 'none';
+}
+
+// ── RENDER SURAH BOX (with optional filtering) ──
+function renderSurahBox(allAyahs, fromVerse, toVerse) {
   const box = document.getElementById('surahArabicBox');
   box.innerHTML = '';
 
-  // Bismillah for all surahs except At-Tawbah (9)
-  if (surah.number !== 9) {
+  // Filter ayahs if range is set
+  const ayahsToShow = (fromVerse && toVerse)
+    ? allAyahs.filter(a => a.number >= fromVerse && a.number <= toVerse)
+    : allAyahs;
+
+  // Bismillah (not for At-Tawbah surah 9, and not when range doesn't start from ayah 1)
+  const showBismillah = currentSurahData.number !== 9 && (!fromVerse || fromVerse === 1);
+  if (showBismillah) {
     const bism = document.createElement('div');
     bism.style.cssText = 'text-align:center;font-size:28px;margin-bottom:16px;color:var(--accent);';
-    bism.textContent = 'بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ';
+    bism.textContent   = 'بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ';
     box.appendChild(bism);
     const hr = document.createElement('div');
     hr.style.cssText = 'height:1px;background:var(--border);margin:12px 0 16px;';
     box.appendChild(hr);
   }
 
-  surah.ayahs.forEach(ayah => {
+  ayahsToShow.forEach(ayah => {
     const span = document.createElement('span');
     span.innerHTML = `${ayah.text} <span class="ayah-number">${toArabicNumerals(ayah.number)}</span> `;
     box.appendChild(span);
   });
+}
 
-  document.getElementById('step-surah').style.display = 'block';
-  document.getElementById('step-record').style.display = 'block';
+// ── UPDATE SURAH META PILLS ──
+function updateSurahMeta() {
+  if (!currentSurahData) return;
+  document.getElementById('surahMetaName').textContent  = `${currentSurahData.englishName} — ${currentSurahData.name}`;
+  document.getElementById('surahMetaNum').textContent   = `Surah ${currentSurahData.number}`;
+  document.getElementById('surahMetaAyahs').textContent = `${currentSurahData.numberOfAyahs} Total Verses`;
 
-  // Reset record state
-  resetRecordState();
-  document.getElementById('step-results').style.display = 'none';
-  document.getElementById('dividerResults').style.display = 'none';
-  document.getElementById('step-thankyou').style.display = 'none';
-
-  document.getElementById('step-surah').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const rangePill = document.getElementById('surahMetaRange');
+  if (activeVerseFrom && activeVerseTo) {
+    rangePill.textContent    = `Showing Ayah ${activeVerseFrom}–${activeVerseTo}`;
+    rangePill.style.display  = 'inline-block';
+  } else {
+    rangePill.style.display  = 'none';
+  }
 }
 
 function toArabicNumerals(n) {
@@ -1042,65 +1196,49 @@ function initSpeechRecognition() {
     return;
   }
   recognition = new SpeechRec();
-  recognition.lang = 'ar-SA';
-  recognition.continuous = true;
-  recognition.interimResults = true;
+  recognition.lang            = 'ar-SA';
+  recognition.continuous      = true;
+  recognition.interimResults  = true;
 
   recognition.onresult = (e) => {
-    let interim = '';
-    let final = '';
+    let interim = '', final = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
+      if (e.results[i].isFinal) final   += e.results[i][0].transcript;
+      else                      interim += e.results[i][0].transcript;
     }
     transcribedText += final;
     const box = document.getElementById('transcriptBox');
     box.style.display = 'block';
-    box.textContent = transcribedText + interim;
+    box.textContent   = transcribedText + interim;
   };
 
-  recognition.onerror = (e) => {
-    setStatus(`Mic error: ${e.error}`, 'error');
-    stopRecording();
-  };
-
-  recognition.onend = () => {
-    if (isRecording) recognition.start();
-  };
+  recognition.onerror = (e) => { setStatus(`Mic error: ${e.error}`, 'error'); stopRecording(); };
+  recognition.onend   = ()  => { if (isRecording) recognition.start(); };
 }
 
 function toggleRecording() {
   if (isRecording) stopRecording();
-  else startRecording();
+  else             startRecording();
 }
 
 function startRecording() {
-  if (!recognition) {
-    alert('Speech recognition not available. Please use Google Chrome.');
-    return;
-  }
-  isRecording = true;
+  if (!recognition) { alert('Speech recognition not available. Please use Google Chrome.'); return; }
+  isRecording     = true;
   transcribedText = '';
-  document.getElementById('transcriptBox').textContent = '';
+  document.getElementById('transcriptBox').textContent  = '';
   document.getElementById('transcriptBox').style.display = 'none';
-  document.getElementById('btnAnalyze').style.display = 'none';
-
-  const btn = document.getElementById('btnRecord');
-  btn.classList.add('recording');
-  document.getElementById('recordLabel').textContent = 'STOP';
+  document.getElementById('btnAnalyze').style.display    = 'none';
+  document.getElementById('btnRecord').classList.add('recording');
+  document.getElementById('recordLabel').textContent     = 'STOP';
   document.getElementById('waveBars').classList.add('active');
   setStatus('🔴 Recording in progress… Recite clearly in Arabic', '');
-
   recognition.start();
 }
 
 function stopRecording() {
   isRecording = false;
-  if (recognition) {
-    try { recognition.stop(); } catch(e) {}
-  }
-  const btn = document.getElementById('btnRecord');
-  btn.classList.remove('recording');
+  try { recognition.stop(); } catch(e) {}
+  document.getElementById('btnRecord').classList.remove('recording');
   document.getElementById('recordLabel').textContent = 'RECORD';
   document.getElementById('waveBars').classList.remove('active');
 
@@ -1113,41 +1251,36 @@ function stopRecording() {
 }
 
 function setStatus(msg, cls) {
-  const el = document.getElementById('statusMsg');
+  const el    = document.getElementById('statusMsg');
   el.textContent = msg;
-  el.className = 'status-msg ' + (cls || '');
+  el.className   = 'status-msg ' + (cls || '');
 }
 
 // ── ANALYZE ──
 async function analyzeRecitation() {
-  if (!transcribedText.trim()) {
-    setStatus('No transcription found. Please record first.', 'error');
-    return;
-  }
-  if (!currentSurahNumber) {
-    setStatus('Please select a Surah first.', 'error');
-    return;
-  }
+  if (!transcribedText.trim())   { setStatus('No transcription found. Please record first.', 'error'); return; }
+  if (!currentSurahNumber)       { setStatus('Please select a Surah first.', 'error'); return; }
 
   setStatus('⏳ System is Analyzing Your Recitation…', 'analyzing');
   document.getElementById('btnAnalyze').disabled = true;
 
   try {
-    const res = await fetch(`${API}/analyze`, {
-      method: 'POST',
+    const body = {
+      surah_number:     currentSurahNumber,
+      transcribed_text: transcribedText.trim(),
+      verse_from:       activeVerseFrom,   // null if no range
+      verse_to:         activeVerseTo
+    };
+
+    const res  = await fetch(`${API}/analyze`, {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        surah_number: currentSurahNumber,
-        transcribed_text: transcribedText.trim()
-      })
+      body:    JSON.stringify(body)
     });
     const data = await res.json();
 
-    if (data.success) {
-      renderResults(data);
-    } else {
-      setStatus('Analysis failed: ' + data.error, 'error');
-    }
+    if (data.success) renderResults(data);
+    else setStatus('Analysis failed: ' + data.error, 'error');
   } catch(e) {
     setStatus('Could not reach backend. Make sure app.py is running.', 'error');
   } finally {
@@ -1155,53 +1288,51 @@ async function analyzeRecitation() {
   }
 }
 
+// ── RENDER RESULTS ──
 function renderResults(data) {
   const { match, accuracy } = data;
 
-  // Match section
   document.getElementById('resSurahNameAr').textContent = match.surahName;
   document.getElementById('resSurahNameEn').textContent = match.surahEnglishName;
-  document.getElementById('resSurahNum').textContent = match.surahNumber;
+  document.getElementById('resSurahNum').textContent    = match.surahNumber;
 
   const ayahStr = match.ayahNumbers.length > 1
     ? `Ayah ${match.ayahNumbers.join(', ')}`
     : `Ayah ${match.ayahNumbers[0]}`;
   document.getElementById('resAyahNums').textContent = ayahStr;
 
-  // Score
-  const pct = accuracy.overall;
-  document.getElementById('scorePct').textContent = pct + '%';
-
-  // Animated conic gradient circle
-  const circle = document.getElementById('scoreCircle');
+  // Score circle
+  const pct   = accuracy.overall;
   const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red)';
-  circle.style.background = `conic-gradient(${color} ${pct * 3.6}deg, var(--surface) 0deg)`;
+  document.getElementById('scorePct').textContent = pct + '%';
   document.getElementById('scorePct').style.color = color;
+  document.getElementById('scoreCircle').style.background =
+    `conic-gradient(${color} ${pct * 3.6}deg, var(--surface) 0deg)`;
 
-  // Feedback
-  let feedback;
-  if (pct >= 90) feedback = 'Excellent! MashAllah — your recitation is very accurate. Keep it up!';
-  else if (pct >= 70) feedback = 'Good recitation! A few words need attention. Practice those highlighted in red.';
-  else if (pct >= 40) feedback = 'Fair attempt. Review the highlighted words and practice with a teacher.';
-  else feedback = 'Keep practicing! Listen to a Qari reciting this Surah and repeat carefully.';
-  document.getElementById('scoreDesc').textContent = feedback;
+  // Feedback text
+  const feedbacks = {
+    90: 'Excellent! MashAllah — your recitation is very accurate. Keep it up!',
+    70: 'Good recitation! A few words need attention. Practice those highlighted in red.',
+    40: 'Fair attempt. Review the highlighted words and practice with a teacher.',
+    0:  'Keep practicing! Listen to a Qari reciting this Surah and repeat carefully.'
+  };
+  document.getElementById('scoreDesc').textContent =
+    pct >= 90 ? feedbacks[90] : pct >= 70 ? feedbacks[70] : pct >= 40 ? feedbacks[40] : feedbacks[0];
 
-  // Verse texts
   document.getElementById('resOriginalText').textContent = accuracy.originalText;
-  document.getElementById('resSpokenText').textContent = accuracy.spokenText;
+  document.getElementById('resSpokenText').textContent   = accuracy.spokenText;
 
   // Word table
   const tbody = document.getElementById('wordTableBody');
   tbody.innerHTML = '';
   accuracy.wordComparisons.forEach(w => {
+    const accColor  = w.accuracy >= 70 ? 'acc-high' : w.accuracy >= 30 ? 'acc-mid' : 'acc-low';
+    const barColor  = w.accuracy >= 70 ? '#2D5016'  : w.accuracy >= 30 ? '#B8860B' : '#8B1A1A';
+    const missClass = w.spoken === '---' ? 'word-miss' : '';
     const tr = document.createElement('tr');
-    const accColor = w.accuracy >= 70 ? 'acc-high' : w.accuracy >= 30 ? 'acc-mid' : 'acc-low';
-    const barColor = w.accuracy >= 70 ? '#2D5016' : w.accuracy >= 30 ? '#B8860B' : '#8B1A1A';
-    const spokenClass = w.spoken === '---' ? 'word-miss' : '';
-
     tr.innerHTML = `
       <td class="arabic-cell">${w.original}</td>
-      <td class="arabic-cell ${spokenClass}">${w.spoken}</td>
+      <td class="arabic-cell ${missClass}">${w.spoken}</td>
       <td class="acc-cell">
         <div class="acc-bar-wrap">
           <div class="acc-bar">
@@ -1209,53 +1340,61 @@ function renderResults(data) {
           </div>
           <span class="${accColor}">${w.accuracy}%</span>
         </div>
-      </td>
-    `;
+      </td>`;
     tbody.appendChild(tr);
   });
 
-  // Show results
-  document.getElementById('step-results').style.display = 'block';
+  document.getElementById('step-results').style.display  = 'block';
   document.getElementById('dividerResults').style.display = 'block';
   setStatus('✅ Analysis Complete!', '');
-
   document.getElementById('step-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ── NAV ACTIONS ──
 function tryAnotherVerse() {
-  // Reset results and recording, keep surah selection visible
-  document.getElementById('step-results').style.display = 'none';
-  document.getElementById('dividerResults').style.display = 'none';
+  hideResults();
   resetRecordState();
+  // Keep surah + range selection intact so user can just record again
   document.getElementById('step-record').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function endSession() {
-  document.getElementById('step-select').style.display = 'none';
-  document.getElementById('step-surah').style.display = 'none';
-  document.getElementById('step-record').style.display = 'none';
-  document.getElementById('step-results').style.display = 'none';
-  document.getElementById('dividerResults').style.display = 'none';
+  ['step-select','step-verse-range','step-surah','step-record'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  hideResults();
   document.getElementById('step-thankyou').style.display = 'block';
   document.getElementById('step-thankyou').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideResults() {
+  document.getElementById('step-results').style.display  = 'none';
+  document.getElementById('dividerResults').style.display = 'none';
 }
 
 function resetRecordState() {
   isRecording = false;
   transcribedText = '';
-  if (recognition) { try { recognition.stop(); } catch(e) {} }
-  const btn = document.getElementById('btnRecord');
-  if (btn) { btn.classList.remove('recording'); }
-  const label = document.getElementById('recordLabel');
-  if (label) label.textContent = 'RECORD';
-  const wave = document.getElementById('waveBars');
-  if (wave) wave.classList.remove('active');
-  const statusMsg = document.getElementById('statusMsg');
-  if (statusMsg) { statusMsg.textContent = ''; statusMsg.className = 'status-msg'; }
-  const transcriptBox = document.getElementById('transcriptBox');
-  if (transcriptBox) { transcriptBox.textContent = ''; transcriptBox.style.display = 'none'; }
-  const btnAn = document.getElementById('btnAnalyze');
-  if (btnAn) { btnAn.style.display = 'none'; btnAn.disabled = false; }
+  try { if (recognition) recognition.stop(); } catch(e) {}
+  document.getElementById('btnRecord').classList.remove('recording');
+  document.getElementById('recordLabel').textContent      = 'RECORD';
+  document.getElementById('waveBars').classList.remove('active');
+  document.getElementById('statusMsg').textContent        = '';
+  document.getElementById('statusMsg').className          = 'status-msg';
+  document.getElementById('transcriptBox').textContent    = '';
+  document.getElementById('transcriptBox').style.display  = 'none';
+  document.getElementById('btnAnalyze').style.display     = 'none';
+  document.getElementById('btnAnalyze').disabled          = false;
+}
+
+function showLoader(msg) {
+  const ol = document.getElementById('loadingOverlay');
+  ol.querySelector('span').textContent = msg || 'Loading…';
+  ol.classList.remove('hidden');
+}
+
+function hideLoader() {
+  document.getElementById('loadingOverlay').classList.add('hidden');
 }
 </script>
 </body>
