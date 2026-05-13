@@ -394,13 +394,14 @@
     padding: 36px 28px;
   }
 
+  /* ── RECORD BUTTON ── */
   .record-row {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 28px;
     flex-wrap: wrap;
-    margin-top: 24px;
+    margin-top: 8px;
   }
 
   .btn-record {
@@ -675,6 +676,17 @@
     transition: width 0.6s ease;
   }
 
+  /* ── CANDIDATE INFO ── */
+  .candidate-info {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--gold);
+  }
+
   /* ── ACTION BUTTONS ── */
   .action-row {
     display: flex; gap: 16px;
@@ -863,6 +875,7 @@
       Recite &amp; Analyze
     </div>
 
+    <!-- Record + Analyze buttons -->
     <div class="record-row">
       <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
         <button class="btn-record" id="btnRecord" onclick="toggleRecording()">
@@ -916,6 +929,7 @@
           <div class="mi-value" id="resAyahNums"></div>
         </div>
       </div>
+      <div class="candidate-info" id="candidateInfo" style="display:none;"></div>
     </div>
 
     <div class="result-card">
@@ -983,237 +997,186 @@
 const API = 'http://localhost:5000/api';
 
 // ── STATE ──
-let allSurahs       = [];
-let currentSurahData = null;  // full surah object with all ayahs
+let allSurahs          = [];
+let currentSurahData   = null;
 let currentSurahNumber = null;
-let activeVerseFrom = null;   // null = no range selected
-let activeVerseTo   = null;
-let recognition     = null;
-let isRecording     = false;
-let transcribedText = '';
+let activeVerseFrom    = null;
+let activeVerseTo      = null;
 
-// ── INIT ──
+// Speech recognition
+let recognition        = null;
+let isRecording        = false;
+let transcribedText    = '';
+let allAlternatives    = [];
+
+// Audio pipeline (automatic — hidden from user)
+let audioContext       = null;
+let gainNode           = null;
+let analyserNode       = null;
+let rawStream          = null;
+
+// Fixed automatic settings — optimised for noisy environments
+const AUTO_GAIN        = 2.5;   // comfortable amplification
+const AUTO_GATE_RMS    = 0.012; // low noise gate — catches quiet voices
+
+// ────────────────────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   await loadSurahs();
+  await initAudioPipeline();
   initSpeechRecognition();
   document.getElementById('loadingOverlay').classList.add('hidden');
 });
 
-// ── LOAD ALL SURAHS ──
-async function loadSurahs() {
+// ────────────────────────────────────────────────────────────
+// WEB AUDIO NOISE-SUPPRESSION PIPELINE  (fully automatic)
+// ────────────────────────────────────────────────────────────
+async function initAudioPipeline() {
   try {
-    const res  = await fetch(`${API}/surahs`);
-    const data = await res.json();
-    if (data.success) {
-      allSurahs = data.surahs;
-      const sel = document.getElementById('surahDropdown');
-      allSurahs.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.number;
-        opt.textContent = `${s.number}. ${s.englishName} — ${s.name}`;
-        sel.appendChild(opt);
-      });
-    }
-  } catch(e) {
-    document.getElementById('loadingOverlay').classList.add('hidden');
-    alert('Could not connect to backend. Please make sure app.py is running on port 5000.');
+    // Request mic with all hardware noise processing on
+    rawStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation:  { ideal: true },
+        noiseSuppression:  { ideal: true },
+        autoGainControl:   { ideal: true },
+        channelCount:      1,
+        sampleRate:        { ideal: 16000 }
+      }
+    });
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    const source = audioContext.createMediaStreamSource(rawStream);
+
+    // ── Dynamics compressor: lifts quiet speech, squashes loud noise ──
+    const compressor = audioContext.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-50, audioContext.currentTime); // engage early
+    compressor.knee.setValueAtTime(30,        audioContext.currentTime); // soft knee
+    compressor.ratio.setValueAtTime(16,       audioContext.currentTime); // heavy compression
+    compressor.attack.setValueAtTime(0.002,   audioContext.currentTime); // very fast attack
+    compressor.release.setValueAtTime(0.15,   audioContext.currentTime); // quick release
+
+    // ── High-pass filter: cut low-frequency rumble / AC hum ──
+    const highPass = audioContext.createBiquadFilter();
+    highPass.type            = 'highpass';
+    highPass.frequency.value = 80;   // cut everything below 80 Hz
+    highPass.Q.value         = 0.7;
+
+    // ── Notch filter: cut 50/60 Hz mains hum ──
+    const notch50 = audioContext.createBiquadFilter();
+    notch50.type            = 'notch';
+    notch50.frequency.value = 50;
+    notch50.Q.value         = 30;
+
+    const notch60 = audioContext.createBiquadFilter();
+    notch60.type            = 'notch';
+    notch60.frequency.value = 60;
+    notch60.Q.value         = 30;
+
+    // ── Gain node: fixed amplification ──
+    gainNode = audioContext.createGain();
+    gainNode.gain.setValueAtTime(AUTO_GAIN, audioContext.currentTime);
+
+    // ── Analyser (for internal noise gate logic) ──
+    analyserNode = audioContext.createAnalyser();
+    analyserNode.fftSize               = 256;
+    analyserNode.smoothingTimeConstant = 0.6;
+
+    // Wire the graph:
+    // Source → HighPass → Notch50 → Notch60 → Compressor → Gain → Analyser
+    source
+      .connect(highPass)
+      .connect(notch50)
+      .connect(notch60)
+      .connect(compressor)
+      .connect(gainNode)
+      .connect(analyserNode);
+    // Analyser is NOT connected to destination (no feedback)
+
+  } catch (err) {
+    console.warn('Audio pipeline init failed (fallback to default mic):', err);
   }
 }
 
-// ── SURAH SELECTED ──
-async function onSurahChange() {
-  const num = parseInt(document.getElementById('surahDropdown').value);
-  if (!num) {
-    document.getElementById('step-verse-range').style.display = 'none';
-    document.getElementById('step-surah').style.display = 'none';
-    document.getElementById('step-record').style.display = 'none';
-    return;
-  }
-
-  currentSurahNumber = num;
-  activeVerseFrom    = null;
-  activeVerseTo      = null;
-  clearRangeUI();
-
-  showLoader('Loading Surah…');
-
-  try {
-    const res  = await fetch(`${API}/surah/${num}`);
-    const data = await res.json();
-    if (data.success) {
-      currentSurahData = data.surah;
-
-      // Populate verse range inputs with valid max
-      document.getElementById('verseFrom').max = data.surah.numberOfAyahs;
-      document.getElementById('verseTo').max   = data.surah.numberOfAyahs;
-      document.getElementById('verseFrom').value = '';
-      document.getElementById('verseTo').value   = '';
-      document.getElementById('verseRangeError').textContent = '';
-
-      // Show verse-range step
-      document.getElementById('step-verse-range').style.display = 'block';
-
-      // Render full surah (no range yet)
-      renderSurahBox(data.surah.ayahs, null, null);
-      updateSurahMeta();
-
-      document.getElementById('step-surah').style.display = 'block';
-      document.getElementById('step-record').style.display = 'block';
-      resetRecordState();
-      hideResults();
-
-      document.getElementById('step-verse-range').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  } catch(e) {
-    alert('Failed to load surah. Check backend connection.');
-  } finally {
-    hideLoader();
-  }
-}
-
-// ── APPLY VERSE RANGE ──
-function applyVerseRange() {
-  const errEl  = document.getElementById('verseRangeError');
-  const from   = parseInt(document.getElementById('verseFrom').value);
-  const to     = parseInt(document.getElementById('verseTo').value);
-  const maxAyah = currentSurahData ? currentSurahData.numberOfAyahs : 9999;
-
-  errEl.textContent = '';
-
-  // Validation
-  if (!from && !to) {
-    errEl.textContent = 'Please enter at least one verse number, or click "Show Full Surah".';
-    return;
-  }
-  if (isNaN(from) || isNaN(to)) {
-    errEl.textContent = 'Please enter valid numbers in both fields.';
-    return;
-  }
-  if (from < 1 || to < 1) {
-    errEl.textContent = 'Verse numbers must be 1 or greater.';
-    return;
-  }
-  if (from > maxAyah || to > maxAyah) {
-    errEl.textContent = `This Surah only has ${maxAyah} verses. Please enter a number within range.`;
-    return;
-  }
-  if (from > to) {
-    errEl.textContent = '"From" verse cannot be greater than "To" verse.';
-    return;
-  }
-
-  activeVerseFrom = from;
-  activeVerseTo   = to;
-
-  // Update badge
-  document.getElementById('badgeText').textContent = `${from} – ${to}`;
-  document.getElementById('rangeActiveBadge').style.display = 'block';
-
-  // Re-render surah box with filtered ayahs
-  renderSurahBox(currentSurahData.ayahs, from, to);
-  updateSurahMeta();
-  resetRecordState();
-  hideResults();
-
-  document.getElementById('step-surah').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ── CLEAR VERSE RANGE ──
-function clearVerseRange() {
-  activeVerseFrom = null;
-  activeVerseTo   = null;
-  clearRangeUI();
-
-  if (currentSurahData) {
-    renderSurahBox(currentSurahData.ayahs, null, null);
-    updateSurahMeta();
-    resetRecordState();
-    hideResults();
-  }
-}
-
-function clearRangeUI() {
-  document.getElementById('verseFrom').value = '';
-  document.getElementById('verseTo').value   = '';
-  document.getElementById('verseRangeError').textContent = '';
-  document.getElementById('rangeActiveBadge').style.display = 'none';
-}
-
-// ── RENDER SURAH BOX (with optional filtering) ──
-function renderSurahBox(allAyahs, fromVerse, toVerse) {
-  const box = document.getElementById('surahArabicBox');
-  box.innerHTML = '';
-
-  // Filter ayahs if range is set
-  const ayahsToShow = (fromVerse && toVerse)
-    ? allAyahs.filter(a => a.number >= fromVerse && a.number <= toVerse)
-    : allAyahs;
-
-  // Bismillah (not for At-Tawbah surah 9, and not when range doesn't start from ayah 1)
-  const showBismillah = currentSurahData.number !== 9 && (!fromVerse || fromVerse === 1);
-  if (showBismillah) {
-    const bism = document.createElement('div');
-    bism.style.cssText = 'text-align:center;font-size:28px;margin-bottom:16px;color:var(--accent);';
-    bism.textContent   = 'بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ';
-    box.appendChild(bism);
-    const hr = document.createElement('div');
-    hr.style.cssText = 'height:1px;background:var(--border);margin:12px 0 16px;';
-    box.appendChild(hr);
-  }
-
-  ayahsToShow.forEach(ayah => {
-    const span = document.createElement('span');
-    span.innerHTML = `${ayah.text} <span class="ayah-number">${toArabicNumerals(ayah.number)}</span> `;
-    box.appendChild(span);
-  });
-}
-
-// ── UPDATE SURAH META PILLS ──
-function updateSurahMeta() {
-  if (!currentSurahData) return;
-  document.getElementById('surahMetaName').textContent  = `${currentSurahData.englishName} — ${currentSurahData.name}`;
-  document.getElementById('surahMetaNum').textContent   = `Surah ${currentSurahData.number}`;
-  document.getElementById('surahMetaAyahs').textContent = `${currentSurahData.numberOfAyahs} Total Verses`;
-
-  const rangePill = document.getElementById('surahMetaRange');
-  if (activeVerseFrom && activeVerseTo) {
-    rangePill.textContent    = `Showing Ayah ${activeVerseFrom}–${activeVerseTo}`;
-    rangePill.style.display  = 'inline-block';
-  } else {
-    rangePill.style.display  = 'none';
-  }
-}
-
-function toArabicNumerals(n) {
-  return String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
-}
-
-// ── SPEECH RECOGNITION ──
+// ────────────────────────────────────────────────────────────
+// SPEECH RECOGNITION
+// ────────────────────────────────────────────────────────────
 function initSpeechRecognition() {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) {
-    document.getElementById('statusMsg').textContent = '⚠️ Browser does not support speech recognition. Use Chrome.';
+    document.getElementById('statusMsg').textContent =
+      '⚠️ Browser does not support speech recognition. Please use Chrome.';
     return;
   }
+
   recognition = new SpeechRec();
   recognition.lang            = 'ar-SA';
   recognition.continuous      = true;
   recognition.interimResults  = true;
+  recognition.maxAlternatives = 5;   // collect multiple candidates
 
   recognition.onresult = (e) => {
-    let interim = '', final = '';
+    let interim = '';
+
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final   += e.results[i][0].transcript;
-      else                      interim += e.results[i][0].transcript;
+      const result = e.results[i];
+
+      if (result.isFinal) {
+        const primary = result[0].transcript;
+
+        // Noise gate: skip result if RMS is below threshold AND text is very short
+        // (guards against noise blips being transcribed as single characters)
+        if (primary.trim().length < 2 && getRMS() < AUTO_GATE_RMS) continue;
+
+        transcribedText += primary;
+
+        // Collect all alternative hypotheses
+        for (let j = 1; j < result.length; j++) {
+          const alt = result[j].transcript.trim();
+          if (alt && !allAlternatives.includes(alt)) {
+            allAlternatives.push(alt);
+          }
+        }
+      } else {
+        interim += result[0].transcript;
+      }
     }
-    transcribedText += final;
+
     const box = document.getElementById('transcriptBox');
     box.style.display = 'block';
     box.textContent   = transcribedText + interim;
   };
 
-  recognition.onerror = (e) => { setStatus(`Mic error: ${e.error}`, 'error'); stopRecording(); };
-  recognition.onend   = ()  => { if (isRecording) recognition.start(); };
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') {
+      setStatus('🎙 Waiting for speech… recite clearly.', '');
+      return;
+    }
+    if (e.error === 'aborted') return;
+    setStatus(`Mic error: ${e.error}`, 'error');
+    stopRecording();
+  };
+
+  // Auto-restart to handle browser's 60-second limit
+  recognition.onend = () => {
+    if (isRecording) {
+      try { recognition.start(); } catch(_) {}
+    }
+  };
+}
+
+// Helper: read current RMS from analyser (used by noise gate)
+function getRMS() {
+  if (!analyserNode) return 1; // assume loud if no analyser
+  const buf = new Uint8Array(analyserNode.frequencyBinCount);
+  analyserNode.getByteTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = (buf[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / buf.length);
 }
 
 function toggleRecording() {
@@ -1221,32 +1184,55 @@ function toggleRecording() {
   else             startRecording();
 }
 
-function startRecording() {
-  if (!recognition) { alert('Speech recognition not available. Please use Google Chrome.'); return; }
+async function startRecording() {
+  if (!recognition) {
+    alert('Speech recognition not available. Please use Google Chrome.');
+    return;
+  }
+
+  // Resume AudioContext after user gesture
+  if (audioContext && audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
   isRecording     = true;
   transcribedText = '';
-  document.getElementById('transcriptBox').textContent  = '';
+  allAlternatives = [];
+
+  document.getElementById('transcriptBox').textContent   = '';
   document.getElementById('transcriptBox').style.display = 'none';
   document.getElementById('btnAnalyze').style.display    = 'none';
   document.getElementById('btnRecord').classList.add('recording');
   document.getElementById('recordLabel').textContent     = 'STOP';
   document.getElementById('waveBars').classList.add('active');
-  setStatus('🔴 Recording in progress… Recite clearly in Arabic', '');
-  recognition.start();
+  setStatus('🔴 Recording… Recite clearly in Arabic. Speaking slowly is fine.', '');
+
+  try {
+    recognition.start();
+  } catch(e) {
+    // Already started — ignore
+  }
 }
 
 function stopRecording() {
   isRecording = false;
-  try { recognition.stop(); } catch(e) {}
+
+  try { recognition.stop(); } catch(_) {}
+
   document.getElementById('btnRecord').classList.remove('recording');
   document.getElementById('recordLabel').textContent = 'RECORD';
   document.getElementById('waveBars').classList.remove('active');
 
-  if (transcribedText.trim()) {
-    setStatus('✅ Recording complete. Click "Analyze Recitation" to proceed.', '');
+  const hasText = transcribedText.trim().length > 0;
+  if (hasText) {
+    const altCount = allAlternatives.length;
+    const altNote  = altCount > 0
+      ? ` (${altCount} alternative${altCount > 1 ? 's' : ''} captured)`
+      : '';
+    setStatus(`✅ Recording complete${altNote}. Click "Analyze Recitation" to proceed.`, '');
     document.getElementById('btnAnalyze').style.display = 'inline-block';
   } else {
-    setStatus('No speech detected. Please try again.', 'error');
+    setStatus('⚠️ No speech detected. Please speak closer to the microphone and try again.', 'error');
   }
 }
 
@@ -1256,39 +1242,50 @@ function setStatus(msg, cls) {
   el.className   = 'status-msg ' + (cls || '');
 }
 
-// ── ANALYZE ──
+// ────────────────────────────────────────────────────────────
+// ANALYZE
+// ────────────────────────────────────────────────────────────
 async function analyzeRecitation() {
-  if (!transcribedText.trim())   { setStatus('No transcription found. Please record first.', 'error'); return; }
-  if (!currentSurahNumber)       { setStatus('Please select a Surah first.', 'error'); return; }
+  if (!transcribedText.trim()) {
+    setStatus('No transcription found. Please record first.', 'error');
+    return;
+  }
+  if (!currentSurahNumber) {
+    setStatus('Please select a Surah first.', 'error');
+    return;
+  }
 
-  setStatus('⏳ System is Analyzing Your Recitation…', 'analyzing');
+  setStatus('⏳ Analyzing recitation across all recognition candidates…', 'analyzing');
   document.getElementById('btnAnalyze').disabled = true;
 
   try {
     const body = {
       surah_number:     currentSurahNumber,
       transcribed_text: transcribedText.trim(),
-      verse_from:       activeVerseFrom,   // null if no range
-      verse_to:         activeVerseTo
+      alternatives:     allAlternatives,
+      verse_from:       activeVerseFrom,
+      verse_to:         activeVerseTo,
     };
 
     const res  = await fetch(`${API}/analyze`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body)
+      body:    JSON.stringify(body),
     });
     const data = await res.json();
 
     if (data.success) renderResults(data);
     else setStatus('Analysis failed: ' + data.error, 'error');
   } catch(e) {
-    setStatus('Could not reach backend. Make sure app.py is running.', 'error');
+    setStatus('Could not reach backend. Make sure app.py is running on port 5000.', 'error');
   } finally {
     document.getElementById('btnAnalyze').disabled = false;
   }
 }
 
-// ── RENDER RESULTS ──
+// ────────────────────────────────────────────────────────────
+// RENDER RESULTS
+// ────────────────────────────────────────────────────────────
 function renderResults(data) {
   const { match, accuracy } = data;
 
@@ -1301,6 +1298,15 @@ function renderResults(data) {
     : `Ayah ${match.ayahNumbers[0]}`;
   document.getElementById('resAyahNums').textContent = ayahStr;
 
+  const candEl = document.getElementById('candidateInfo');
+  if (match.totalCandidates > 1) {
+    candEl.style.display = 'block';
+    candEl.textContent   =
+      `🔁 System evaluated ${match.totalCandidates} recognition candidate(s) and selected the best-matching transcript for analysis.`;
+  } else {
+    candEl.style.display = 'none';
+  }
+
   // Score circle
   const pct   = accuracy.overall;
   const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red)';
@@ -1309,12 +1315,11 @@ function renderResults(data) {
   document.getElementById('scoreCircle').style.background =
     `conic-gradient(${color} ${pct * 3.6}deg, var(--surface) 0deg)`;
 
-  // Feedback text
   const feedbacks = {
     90: 'Excellent! MashAllah — your recitation is very accurate. Keep it up!',
     70: 'Good recitation! A few words need attention. Practice those highlighted in red.',
     40: 'Fair attempt. Review the highlighted words and practice with a teacher.',
-    0:  'Keep practicing! Listen to a Qari reciting this Surah and repeat carefully.'
+    0:  'Keep practicing! Listen to a Qari reciting this Surah and repeat carefully.',
   };
   document.getElementById('scoreDesc').textContent =
     pct >= 90 ? feedbacks[90] : pct >= 70 ? feedbacks[70] : pct >= 40 ? feedbacks[40] : feedbacks[0];
@@ -1328,7 +1333,7 @@ function renderResults(data) {
   accuracy.wordComparisons.forEach(w => {
     const accColor  = w.accuracy >= 70 ? 'acc-high' : w.accuracy >= 30 ? 'acc-mid' : 'acc-low';
     const barColor  = w.accuracy >= 70 ? '#2D5016'  : w.accuracy >= 30 ? '#B8860B' : '#8B1A1A';
-    const missClass = w.spoken === '---' ? 'word-miss' : '';
+    const missClass = (w.spoken === '---' || w.original === '---') ? 'word-miss' : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="arabic-cell">${w.original}</td>
@@ -1350,18 +1355,171 @@ function renderResults(data) {
   document.getElementById('step-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ── NAV ACTIONS ──
+// ────────────────────────────────────────────────────────────
+// SURAH LOADING / DISPLAY
+// ────────────────────────────────────────────────────────────
+async function loadSurahs() {
+  try {
+    const res  = await fetch(`${API}/surahs`);
+    const data = await res.json();
+    if (data.success) {
+      allSurahs = data.surahs;
+      const sel = document.getElementById('surahDropdown');
+      allSurahs.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.number;
+        opt.textContent = `${s.number}. ${s.englishName} — ${s.name}`;
+        sel.appendChild(opt);
+      });
+    }
+  } catch(e) {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    alert('Could not connect to backend. Please make sure app.py is running on port 5000.');
+  }
+}
+
+async function onSurahChange() {
+  const num = parseInt(document.getElementById('surahDropdown').value);
+  if (!num) {
+    ['step-verse-range','step-surah','step-record'].forEach(id =>
+      document.getElementById(id).style.display = 'none'
+    );
+    return;
+  }
+
+  currentSurahNumber = num;
+  activeVerseFrom    = null;
+  activeVerseTo      = null;
+  clearRangeUI();
+  showLoader('Loading Surah…');
+
+  try {
+    const res  = await fetch(`${API}/surah/${num}`);
+    const data = await res.json();
+    if (data.success) {
+      currentSurahData = data.surah;
+      document.getElementById('verseFrom').max   = data.surah.numberOfAyahs;
+      document.getElementById('verseTo').max     = data.surah.numberOfAyahs;
+      document.getElementById('verseFrom').value = '';
+      document.getElementById('verseTo').value   = '';
+      document.getElementById('verseRangeError').textContent = '';
+
+      document.getElementById('step-verse-range').style.display = 'block';
+      renderSurahBox(data.surah.ayahs, null, null);
+      updateSurahMeta();
+      document.getElementById('step-surah').style.display  = 'block';
+      document.getElementById('step-record').style.display = 'block';
+      resetRecordState();
+      hideResults();
+
+      document.getElementById('step-verse-range').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } catch(e) {
+    alert('Failed to load surah. Check backend connection.');
+  } finally {
+    hideLoader();
+  }
+}
+
+function applyVerseRange() {
+  const errEl   = document.getElementById('verseRangeError');
+  const from    = parseInt(document.getElementById('verseFrom').value);
+  const to      = parseInt(document.getElementById('verseTo').value);
+  const maxAyah = currentSurahData ? currentSurahData.numberOfAyahs : 9999;
+  errEl.textContent = '';
+
+  if (!from && !to) { errEl.textContent = 'Please enter at least one verse number, or click "Show Full Surah".'; return; }
+  if (isNaN(from) || isNaN(to)) { errEl.textContent = 'Please enter valid numbers in both fields.'; return; }
+  if (from < 1 || to < 1) { errEl.textContent = 'Verse numbers must be 1 or greater.'; return; }
+  if (from > maxAyah || to > maxAyah) { errEl.textContent = `This Surah only has ${maxAyah} verses.`; return; }
+  if (from > to) { errEl.textContent = '"From" verse cannot be greater than "To" verse.'; return; }
+
+  activeVerseFrom = from;
+  activeVerseTo   = to;
+  document.getElementById('badgeText').textContent = `${from} – ${to}`;
+  document.getElementById('rangeActiveBadge').style.display = 'block';
+
+  renderSurahBox(currentSurahData.ayahs, from, to);
+  updateSurahMeta();
+  resetRecordState();
+  hideResults();
+  document.getElementById('step-surah').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function clearVerseRange() {
+  activeVerseFrom = null;
+  activeVerseTo   = null;
+  clearRangeUI();
+  if (currentSurahData) {
+    renderSurahBox(currentSurahData.ayahs, null, null);
+    updateSurahMeta();
+    resetRecordState();
+    hideResults();
+  }
+}
+
+function clearRangeUI() {
+  document.getElementById('verseFrom').value = '';
+  document.getElementById('verseTo').value   = '';
+  document.getElementById('verseRangeError').textContent = '';
+  document.getElementById('rangeActiveBadge').style.display = 'none';
+}
+
+function renderSurahBox(allAyahs, fromVerse, toVerse) {
+  const box = document.getElementById('surahArabicBox');
+  box.innerHTML = '';
+
+  const ayahsToShow = (fromVerse && toVerse)
+    ? allAyahs.filter(a => a.number >= fromVerse && a.number <= toVerse)
+    : allAyahs;
+
+  const showBismillah = currentSurahData.number !== 9 && (!fromVerse || fromVerse === 1);
+  if (showBismillah) {
+    const bism = document.createElement('div');
+    bism.style.cssText = 'text-align:center;font-size:28px;margin-bottom:16px;color:var(--accent);';
+    bism.textContent   = 'بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ';
+    box.appendChild(bism);
+    const hr = document.createElement('div');
+    hr.style.cssText = 'height:1px;background:var(--border);margin:12px 0 16px;';
+    box.appendChild(hr);
+  }
+
+  ayahsToShow.forEach(ayah => {
+    const span = document.createElement('span');
+    span.innerHTML = `${ayah.text} <span class="ayah-number">${toArabicNumerals(ayah.number)}</span> `;
+    box.appendChild(span);
+  });
+}
+
+function updateSurahMeta() {
+  if (!currentSurahData) return;
+  document.getElementById('surahMetaName').textContent  = `${currentSurahData.englishName} — ${currentSurahData.name}`;
+  document.getElementById('surahMetaNum').textContent   = `Surah ${currentSurahData.number}`;
+  document.getElementById('surahMetaAyahs').textContent = `${currentSurahData.numberOfAyahs} Total Verses`;
+  const rangePill = document.getElementById('surahMetaRange');
+  if (activeVerseFrom && activeVerseTo) {
+    rangePill.textContent   = `Showing Ayah ${activeVerseFrom}–${activeVerseTo}`;
+    rangePill.style.display = 'inline-block';
+  } else {
+    rangePill.style.display = 'none';
+  }
+}
+
+function toArabicNumerals(n) {
+  return String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+}
+
+// ── NAV ──
 function tryAnotherVerse() {
   hideResults();
   resetRecordState();
-  // Keep surah + range selection intact so user can just record again
   document.getElementById('step-record').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function endSession() {
-  ['step-select','step-verse-range','step-surah','step-record'].forEach(id => {
-    document.getElementById(id).style.display = 'none';
-  });
+  ['step-select','step-verse-range','step-surah','step-record'].forEach(id =>
+    document.getElementById(id).style.display = 'none'
+  );
   hideResults();
   document.getElementById('step-thankyou').style.display = 'block';
   document.getElementById('step-thankyou').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1373,18 +1531,19 @@ function hideResults() {
 }
 
 function resetRecordState() {
-  isRecording = false;
+  isRecording     = false;
   transcribedText = '';
-  try { if (recognition) recognition.stop(); } catch(e) {}
+  allAlternatives = [];
+  try { if (recognition) recognition.stop(); } catch(_) {}
   document.getElementById('btnRecord').classList.remove('recording');
-  document.getElementById('recordLabel').textContent      = 'RECORD';
+  document.getElementById('recordLabel').textContent     = 'RECORD';
   document.getElementById('waveBars').classList.remove('active');
-  document.getElementById('statusMsg').textContent        = '';
-  document.getElementById('statusMsg').className          = 'status-msg';
-  document.getElementById('transcriptBox').textContent    = '';
-  document.getElementById('transcriptBox').style.display  = 'none';
-  document.getElementById('btnAnalyze').style.display     = 'none';
-  document.getElementById('btnAnalyze').disabled          = false;
+  document.getElementById('statusMsg').textContent       = '';
+  document.getElementById('statusMsg').className         = 'status-msg';
+  document.getElementById('transcriptBox').textContent   = '';
+  document.getElementById('transcriptBox').style.display = 'none';
+  document.getElementById('btnAnalyze').style.display    = 'none';
+  document.getElementById('btnAnalyze').disabled         = false;
 }
 
 function showLoader(msg) {

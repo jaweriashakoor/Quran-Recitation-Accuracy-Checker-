@@ -27,6 +27,8 @@ def normalize_arabic(text):
     text = re.sub(r'[آأإ]', 'ا', text)   # alef variants → plain alef
     text = re.sub(r'ة', 'ه', text)        # teh marbuta → heh
     text = re.sub(r'ى', 'ي', text)        # alef maqsura → ya
+    text = re.sub(r'و(?=\s|$)', 'و', text)  # keep waw normalised
+    text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
 
@@ -38,8 +40,59 @@ def word_accuracy(original, spoken):
         return 100
     if not orig_n or not spoken_n:
         return 0
+
+    # Substring bonus: if one is contained in the other (slow speech / partial)
+    if orig_n in spoken_n or spoken_n in orig_n:
+        shorter = min(len(orig_n), len(spoken_n))
+        longer  = max(len(orig_n), len(spoken_n))
+        bonus   = shorter / longer
+        ratio   = difflib.SequenceMatcher(None, orig_n, spoken_n).ratio()
+        return round(max(ratio, bonus) * 100)
+
     ratio = difflib.SequenceMatcher(None, orig_n, spoken_n).ratio()
     return round(ratio * 100)
+
+
+def score_transcription(transcribed_words, ayahs_to_search):
+    """
+    Find the best-matching ayah window for a given list of transcribed words.
+    Returns (best_score, best_ayah_indices).
+    """
+    best_score        = -1
+    best_ayah_indices = []
+
+    # Single-ayah scan
+    for i, ayah in enumerate(ayahs_to_search):
+        ayah_words = normalize_arabic(ayah['text']).split()
+        score = difflib.SequenceMatcher(None, transcribed_words, ayah_words).ratio()
+
+        # Partial-match boost: if user only spoke part of a long ayah, 
+        # also try matching the transcription against the first N words of the ayah.
+        if len(transcribed_words) < len(ayah_words):
+            partial_words = ayah_words[:len(transcribed_words) + 3]
+            partial_score = difflib.SequenceMatcher(None, transcribed_words, partial_words).ratio()
+            # Weight partial score slightly lower so full matches still win
+            score = max(score, partial_score * 0.92)
+
+        if score > best_score:
+            best_score        = score
+            best_ayah_indices = [i]
+
+    # Multi-ayah windows (2 to min 6)
+    max_window = min(6, len(ayahs_to_search) + 1)
+    for window in range(2, max_window):
+        for i in range(len(ayahs_to_search) - window + 1):
+            combined_norm = ' '.join(
+                normalize_arabic(ayahs_to_search[j]['text'])
+                for j in range(i, i + window)
+            )
+            combined_words = combined_norm.split()
+            score = difflib.SequenceMatcher(None, transcribed_words, combined_words).ratio()
+            if score > best_score:
+                best_score        = score
+                best_ayah_indices = list(range(i, i + window))
+
+    return best_score, best_ayah_indices
 
 
 def fetch_surah_from_api(surah_number):
@@ -129,20 +182,24 @@ def analyze_recitation():
     Compare transcribed recitation against the selected surah.
 
     Body JSON:
-        surah_number     (int, required)
-        transcribed_text (str, required)
-        verse_from       (int | null, optional) — start of verse range
-        verse_to         (int | null, optional) — end of verse range
+        surah_number        (int, required)
+        transcribed_text    (str, required)  — best / primary transcript
+        alternatives        (list[str], opt) — other recognition candidates
+        verse_from          (int | null)
+        verse_to            (int | null)
 
-    When verse_from / verse_to are provided the matching is restricted
-    to those ayahs only; otherwise the whole surah is searched.
+    When multiple alternatives are supplied the backend picks whichever
+    transcription scores highest against the Quran text, so quiet /
+    noisy recordings that produce uncertain transcripts still get the
+    best possible match.
     """
     try:
         body             = request.json
         surah_number     = body.get('surah_number')
         transcribed_text = (body.get('transcribed_text') or '').strip()
-        verse_from       = body.get('verse_from')   # may be None
-        verse_to         = body.get('verse_to')     # may be None
+        alternatives     = body.get('alternatives', [])   # ← NEW
+        verse_from       = body.get('verse_from')
+        verse_to         = body.get('verse_to')
 
         if not surah_number or not transcribed_text:
             return jsonify({'success': False, 'error': 'Missing surah_number or transcribed_text'})
@@ -151,8 +208,8 @@ def analyze_recitation():
         if not raw:
             return jsonify({'success': False, 'error': 'Failed to fetch surah for analysis'})
 
-        all_ayahs    = raw['ayahs']
-        surah_name   = raw['name']
+        all_ayahs     = raw['ayahs']
+        surah_name    = raw['name']
         surah_english = raw['englishName']
 
         # ── Filter ayahs to the selected range (if any) ──
@@ -166,64 +223,68 @@ def analyze_recitation():
         else:
             ayahs_to_search = all_ayahs
 
-        # ── Normalize user's transcription ──
-        transcribed_words = normalize_arabic(transcribed_text).split()
+        # ── Build candidate list: primary + all alternatives ──
+        candidates = [transcribed_text] + [a.strip() for a in alternatives if a.strip()]
 
-        # ── Find best-matching ayah or window of ayahs ──
-        best_score        = -1
-        best_ayah_indices = []   # indices into ayahs_to_search
+        # ── Score every candidate and keep the best ──
+        best_overall_score    = -1
+        best_overall_indices  = []
+        best_candidate_text   = transcribed_text
 
-        # Single-ayah scan
-        for i, ayah in enumerate(ayahs_to_search):
-            ayah_words = normalize_arabic(ayah['text']).split()
-            score = difflib.SequenceMatcher(None, transcribed_words, ayah_words).ratio()
-            if score > best_score:
-                best_score        = score
-                best_ayah_indices = [i]
+        for candidate in candidates:
+            norm_words = normalize_arabic(candidate).split()
+            if not norm_words:
+                continue
+            score, indices = score_transcription(norm_words, ayahs_to_search)
+            if score > best_overall_score:
+                best_overall_score   = score
+                best_overall_indices = indices
+                best_candidate_text  = candidate
 
-        # Multi-ayah windows (2 to min 6)
-        max_window = min(6, len(ayahs_to_search) + 1)
-        for window in range(2, max_window):
-            for i in range(len(ayahs_to_search) - window + 1):
-                combined_norm = ' '.join(
-                    normalize_arabic(ayahs_to_search[j]['text'])
-                    for j in range(i, i + window)
-                )
-                combined_words = combined_norm.split()
-                score = difflib.SequenceMatcher(None, transcribed_words, combined_words).ratio()
-                if score > best_score:
-                    best_score        = score
-                    best_ayah_indices = list(range(i, i + window))
-
-        # ── Build matched content ──
-        matched_ayahs       = [ayahs_to_search[i] for i in best_ayah_indices]
+        # ── Build matched content using the winning candidate ──
+        matched_ayahs        = [ayahs_to_search[i] for i in best_overall_indices]
         matched_ayah_numbers = [a['numberInSurah'] for a in matched_ayahs]
-        combined_original   = ' '.join(a['text'] for a in matched_ayahs)
+        combined_original    = ' '.join(a['text'] for a in matched_ayahs)
 
         orig_words   = combined_original.split()
-        spoken_words = transcribed_text.split()
+        spoken_words = best_candidate_text.split()
 
         # ── Word-by-word comparison ──
-        max_len = max(len(orig_words), len(spoken_words))
+        # Use SequenceMatcher to align words intelligently (handles insertions/deletions)
+        matcher = difflib.SequenceMatcher(None,
+            [normalize_arabic(w) for w in orig_words],
+            [normalize_arabic(w) for w in spoken_words]
+        )
+
         word_comparisons = []
-        for idx in range(max_len):
-            orig_w   = orig_words[idx]   if idx < len(orig_words)   else None
-            spoken_w = spoken_words[idx] if idx < len(spoken_words) else None
-
-            if orig_w and spoken_w:
-                acc = word_accuracy(orig_w, spoken_w)
-            elif orig_w:
-                acc      = 0
-                spoken_w = '---'
-            else:
-                acc    = 0
-                orig_w = '---'
-
-            word_comparisons.append({
-                'original': orig_w,
-                'spoken':   spoken_w,
-                'accuracy': acc,
-            })
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal':
+                for k in range(i2 - i1):
+                    word_comparisons.append({
+                        'original': orig_words[i1 + k],
+                        'spoken':   spoken_words[j1 + k],
+                        'accuracy': 100,
+                    })
+            elif tag == 'replace':
+                orig_chunk   = orig_words[i1:i2]
+                spoken_chunk = spoken_words[j1:j2]
+                max_len      = max(len(orig_chunk), len(spoken_chunk))
+                for k in range(max_len):
+                    ow = orig_chunk[k]   if k < len(orig_chunk)   else None
+                    sw = spoken_chunk[k] if k < len(spoken_chunk) else None
+                    if ow and sw:
+                        acc = word_accuracy(ow, sw)
+                    elif ow:
+                        acc, sw = 0, '---'
+                    else:
+                        acc, ow = 0, '---'
+                    word_comparisons.append({'original': ow, 'spoken': sw, 'accuracy': acc})
+            elif tag == 'delete':
+                for k in range(i1, i2):
+                    word_comparisons.append({'original': orig_words[k], 'spoken': '---', 'accuracy': 0})
+            elif tag == 'insert':
+                for k in range(j1, j2):
+                    word_comparisons.append({'original': '---', 'spoken': spoken_words[k], 'accuracy': 0})
 
         overall_accuracy = (
             round(sum(w['accuracy'] for w in word_comparisons) / len(word_comparisons))
@@ -237,13 +298,15 @@ def analyze_recitation():
                 'surahEnglishName': surah_english,
                 'surahNumber':      surah_number,
                 'ayahNumbers':      matched_ayah_numbers,
-                'confidence':       round(best_score * 100),
+                'confidence':       round(best_overall_score * 100),
                 'rangeUsed':        bool(verse_from and verse_to),
+                'candidateUsed':    best_candidate_text,        # ← which transcript won
+                'totalCandidates':  len(candidates),
             },
             'accuracy': {
                 'overall':         overall_accuracy,
                 'originalText':    combined_original,
-                'spokenText':      transcribed_text,
+                'spokenText':      best_candidate_text,
                 'wordComparisons': word_comparisons,
             }
         })
