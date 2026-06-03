@@ -523,6 +523,30 @@
     50%{transform:scaleY(1)}
   }
 
+  /* ── Whisper processing indicator ── */
+  .whisper-status {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  .whisper-status.visible { display: flex; }
+
+  .whisper-spinner {
+    width: 18px; height: 18px;
+    border: 3px solid rgba(184,134,11,0.25);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* ── RESULTS ── */
   #step-results { display: none; }
 
@@ -772,8 +796,6 @@
     animation: spin 0.7s linear infinite;
   }
 
-  @keyframes spin { to { transform: rotate(360deg); } }
-
   footer {
     background: var(--bg-card);
     border-top: 2px solid var(--border);
@@ -794,7 +816,7 @@
 <header>
   <div class="header-bismillah">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ</div>
   <h1>Welcome To <span>Quran Recitation</span><br>Accuracy Checker</h1>
-  <div class="header-sub">Perfect Your Tajweed · Word by Word Analysis · AI Powered</div>
+  <div class="header-sub">Perfect Your Tajweed · Word by Word Analysis · Whisper AI Powered</div>
 </header>
 
 <div class="container">
@@ -900,6 +922,12 @@
       </button>
     </div>
 
+    <!-- Whisper transcription progress indicator -->
+    <div class="whisper-status" id="whisperStatus">
+      <div class="whisper-spinner"></div>
+      <span id="whisperStatusText">Transcribing with Whisper AI…</span>
+    </div>
+
     <div class="status-msg" id="statusMsg"></div>
     <div class="transcript-box" id="transcriptBox"></div>
   </div>
@@ -990,7 +1018,7 @@
 </div><!-- /container -->
 
 <footer>
-  Quran Recitation Accuracy Checker &nbsp;·&nbsp; Data from AlQuran.cloud API &nbsp;·&nbsp; Built with ❤️ for the Ummah
+  Quran Recitation Accuracy Checker &nbsp;·&nbsp; Data from AlQuran.cloud API &nbsp;·&nbsp; Transcription by OpenAI Whisper &nbsp;·&nbsp; Built with ❤️ for the Ummah
 </footer>
 
 <script>
@@ -1003,237 +1031,180 @@ let currentSurahNumber = null;
 let activeVerseFrom    = null;
 let activeVerseTo      = null;
 
-// Speech recognition
-let recognition        = null;
+// Recording state
+let mediaRecorder      = null;
+let audioChunks        = [];
 let isRecording        = false;
+let micStream          = null;
 let transcribedText    = '';
-let allAlternatives    = [];
-
-// Audio pipeline (automatic — hidden from user)
-let audioContext       = null;
-let gainNode           = null;
-let analyserNode       = null;
-let rawStream          = null;
-
-// Fixed automatic settings — optimised for noisy environments
-const AUTO_GAIN        = 2.5;   // comfortable amplification
-const AUTO_GATE_RMS    = 0.012; // low noise gate — catches quiet voices
 
 // ────────────────────────────────────────────────────────────
 // INIT
 // ────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   await loadSurahs();
-  await initAudioPipeline();
-  initSpeechRecognition();
+  // Pre-request mic permission so first click is instant
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = stream;
+    // Keep it around — reuse on first record press
+  } catch(e) {
+    console.warn('Mic permission not granted yet:', e);
+  }
   document.getElementById('loadingOverlay').classList.add('hidden');
 });
 
 // ────────────────────────────────────────────────────────────
-// WEB AUDIO NOISE-SUPPRESSION PIPELINE  (fully automatic)
+// RECORDING via MediaRecorder → send blob → Whisper on backend
 // ────────────────────────────────────────────────────────────
-async function initAudioPipeline() {
-  try {
-    // Request mic with all hardware noise processing on
-    rawStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation:  { ideal: true },
-        noiseSuppression:  { ideal: true },
-        autoGainControl:   { ideal: true },
-        channelCount:      1,
-        sampleRate:        { ideal: 16000 }
-      }
-    });
-
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-    const source = audioContext.createMediaStreamSource(rawStream);
-
-    // ── Dynamics compressor: lifts quiet speech, squashes loud noise ──
-    const compressor = audioContext.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-50, audioContext.currentTime); // engage early
-    compressor.knee.setValueAtTime(30,        audioContext.currentTime); // soft knee
-    compressor.ratio.setValueAtTime(16,       audioContext.currentTime); // heavy compression
-    compressor.attack.setValueAtTime(0.002,   audioContext.currentTime); // very fast attack
-    compressor.release.setValueAtTime(0.15,   audioContext.currentTime); // quick release
-
-    // ── High-pass filter: cut low-frequency rumble / AC hum ──
-    const highPass = audioContext.createBiquadFilter();
-    highPass.type            = 'highpass';
-    highPass.frequency.value = 80;   // cut everything below 80 Hz
-    highPass.Q.value         = 0.7;
-
-    // ── Notch filter: cut 50/60 Hz mains hum ──
-    const notch50 = audioContext.createBiquadFilter();
-    notch50.type            = 'notch';
-    notch50.frequency.value = 50;
-    notch50.Q.value         = 30;
-
-    const notch60 = audioContext.createBiquadFilter();
-    notch60.type            = 'notch';
-    notch60.frequency.value = 60;
-    notch60.Q.value         = 30;
-
-    // ── Gain node: fixed amplification ──
-    gainNode = audioContext.createGain();
-    gainNode.gain.setValueAtTime(AUTO_GAIN, audioContext.currentTime);
-
-    // ── Analyser (for internal noise gate logic) ──
-    analyserNode = audioContext.createAnalyser();
-    analyserNode.fftSize               = 256;
-    analyserNode.smoothingTimeConstant = 0.6;
-
-    // Wire the graph:
-    // Source → HighPass → Notch50 → Notch60 → Compressor → Gain → Analyser
-    source
-      .connect(highPass)
-      .connect(notch50)
-      .connect(notch60)
-      .connect(compressor)
-      .connect(gainNode)
-      .connect(analyserNode);
-    // Analyser is NOT connected to destination (no feedback)
-
-  } catch (err) {
-    console.warn('Audio pipeline init failed (fallback to default mic):', err);
-  }
-}
-
-// ────────────────────────────────────────────────────────────
-// SPEECH RECOGNITION
-// ────────────────────────────────────────────────────────────
-function initSpeechRecognition() {
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec) {
-    document.getElementById('statusMsg').textContent =
-      '⚠️ Browser does not support speech recognition. Please use Chrome.';
-    return;
-  }
-
-  recognition = new SpeechRec();
-  recognition.lang            = 'ar-SA';
-  recognition.continuous      = true;
-  recognition.interimResults  = true;
-  recognition.maxAlternatives = 5;   // collect multiple candidates
-
-  recognition.onresult = (e) => {
-    let interim = '';
-
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const result = e.results[i];
-
-      if (result.isFinal) {
-        const primary = result[0].transcript;
-
-        // Noise gate: skip result if RMS is below threshold AND text is very short
-        // (guards against noise blips being transcribed as single characters)
-        if (primary.trim().length < 2 && getRMS() < AUTO_GATE_RMS) continue;
-
-        transcribedText += primary;
-
-        // Collect all alternative hypotheses
-        for (let j = 1; j < result.length; j++) {
-          const alt = result[j].transcript.trim();
-          if (alt && !allAlternatives.includes(alt)) {
-            allAlternatives.push(alt);
-          }
-        }
-      } else {
-        interim += result[0].transcript;
-      }
-    }
-
-    const box = document.getElementById('transcriptBox');
-    box.style.display = 'block';
-    box.textContent   = transcribedText + interim;
-  };
-
-  recognition.onerror = (e) => {
-    if (e.error === 'no-speech') {
-      setStatus('🎙 Waiting for speech… recite clearly.', '');
-      return;
-    }
-    if (e.error === 'aborted') return;
-    setStatus(`Mic error: ${e.error}`, 'error');
-    stopRecording();
-  };
-
-  // Auto-restart to handle browser's 60-second limit
-  recognition.onend = () => {
-    if (isRecording) {
-      try { recognition.start(); } catch(_) {}
-    }
-  };
-}
-
-// Helper: read current RMS from analyser (used by noise gate)
-function getRMS() {
-  if (!analyserNode) return 1; // assume loud if no analyser
-  const buf = new Uint8Array(analyserNode.frequencyBinCount);
-  analyserNode.getByteTimeDomainData(buf);
-  let sum = 0;
-  for (let i = 0; i < buf.length; i++) {
-    const v = (buf[i] - 128) / 128;
-    sum += v * v;
-  }
-  return Math.sqrt(sum / buf.length);
-}
-
-function toggleRecording() {
+async function toggleRecording() {
   if (isRecording) stopRecording();
-  else             startRecording();
+  else             await startRecording();
 }
 
 async function startRecording() {
-  if (!recognition) {
-    alert('Speech recognition not available. Please use Google Chrome.');
+  try {
+    // Re-use existing stream or request a fresh one
+    if (!micStream || micStream.getTracks().some(t => t.readyState === 'ended')) {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl:  true,
+          channelCount:     1,
+          sampleRate:       { ideal: 16000 },
+        }
+      });
+    }
+  } catch(e) {
+    setStatus('⚠️ Microphone access denied. Please allow mic permissions and refresh.', 'error');
     return;
   }
 
-  // Resume AudioContext after user gesture
-  if (audioContext && audioContext.state === 'suspended') {
-    await audioContext.resume();
-  }
-
-  isRecording     = true;
+  audioChunks  = [];
   transcribedText = '';
-  allAlternatives = [];
 
-  document.getElementById('transcriptBox').textContent   = '';
-  document.getElementById('transcriptBox').style.display = 'none';
-  document.getElementById('btnAnalyze').style.display    = 'none';
+  // Pick best supported MIME type
+  const mimeType = getSupportedMimeType();
+
+  mediaRecorder = new MediaRecorder(micStream, mimeType ? { mimeType } : {});
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) audioChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = async () => {
+    await processAudio();
+  };
+
+  mediaRecorder.start(250); // collect chunks every 250ms
+  isRecording = true;
+
   document.getElementById('btnRecord').classList.add('recording');
   document.getElementById('recordLabel').textContent     = 'STOP';
   document.getElementById('waveBars').classList.add('active');
-  setStatus('🔴 Recording… Recite clearly in Arabic. Speaking slowly is fine.', '');
-
-  try {
-    recognition.start();
-  } catch(e) {
-    // Already started — ignore
-  }
+  document.getElementById('btnAnalyze').style.display    = 'none';
+  document.getElementById('transcriptBox').style.display = 'none';
+  document.getElementById('transcriptBox').textContent   = '';
+  setStatus('🔴 Recording… Recite clearly in Arabic. Click STOP when done.', '');
 }
 
 function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
   isRecording = false;
-
-  try { recognition.stop(); } catch(_) {}
+  mediaRecorder.stop();
 
   document.getElementById('btnRecord').classList.remove('recording');
   document.getElementById('recordLabel').textContent = 'RECORD';
   document.getElementById('waveBars').classList.remove('active');
+  setStatus('⏳ Processing audio…', 'analyzing');
+}
 
-  const hasText = transcribedText.trim().length > 0;
-  if (hasText) {
-    const altCount = allAlternatives.length;
-    const altNote  = altCount > 0
-      ? ` (${altCount} alternative${altCount > 1 ? 's' : ''} captured)`
-      : '';
-    setStatus(`✅ Recording complete${altNote}. Click "Analyze Recitation" to proceed.`, '');
-    document.getElementById('btnAnalyze').style.display = 'inline-block';
-  } else {
-    setStatus('⚠️ No speech detected. Please speak closer to the microphone and try again.', 'error');
+function getSupportedMimeType() {
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+    'audio/mp4',
+  ];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
   }
+  return '';
+}
+
+async function processAudio() {
+  if (audioChunks.length === 0) {
+    setStatus('⚠️ No audio captured. Please try again.', 'error');
+    return;
+  }
+
+  // Show Whisper spinner
+  showWhisperStatus('Transcribing with Whisper AI…');
+  setStatus('', '');
+
+  try {
+    const mimeType = mediaRecorder.mimeType || 'audio/webm';
+    const blob     = new Blob(audioChunks, { type: mimeType });
+
+    const formData = new FormData();
+    const ext      = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+    formData.append('audio', blob, `recording.${ext}`);
+
+    // Send expected ayah text for guided Whisper transcription
+    if (currentSurahData) {
+      const ayahsToCheck = currentSurahData.ayahs.filter(a => {
+        if (activeVerseFrom && activeVerseTo) {
+          return a.number >= activeVerseFrom && a.number <= activeVerseTo;
+        }
+        return true;
+      });
+      const expectedText = ayahsToCheck.map(a => a.text).join(' ');
+      if (expectedText) formData.append('expected_text', expectedText);
+    }
+
+    const res  = await fetch(`${API}/transcribe`, {
+      method: 'POST',
+      body:   formData,
+    });
+    const data = await res.json();
+
+    hideWhisperStatus();
+
+    if (!data.success) {
+      setStatus('Transcription failed: ' + data.error, 'error');
+      return;
+    }
+
+    transcribedText = data.transcribed_text.trim();
+
+    if (!transcribedText) {
+      setStatus('⚠️ No speech detected. Please speak clearly and try again.', 'error');
+      return;
+    }
+
+    const box = document.getElementById('transcriptBox');
+    box.style.display = 'block';
+    box.textContent   = transcribedText;
+
+    setStatus('✅ Transcription complete. Click "Analyze Recitation" to proceed.', '');
+    document.getElementById('btnAnalyze').style.display = 'inline-block';
+
+  } catch(e) {
+    hideWhisperStatus();
+    setStatus('Could not reach backend. Make sure app.py is running on port 5000.', 'error');
+  }
+}
+
+function showWhisperStatus(msg) {
+  const el = document.getElementById('whisperStatus');
+  document.getElementById('whisperStatusText').textContent = msg;
+  el.classList.add('visible');
+}
+
+function hideWhisperStatus() {
+  document.getElementById('whisperStatus').classList.remove('visible');
 }
 
 function setStatus(msg, cls) {
@@ -1243,7 +1214,7 @@ function setStatus(msg, cls) {
 }
 
 // ────────────────────────────────────────────────────────────
-// ANALYZE
+// ANALYZE  (unchanged — still posts JSON to /api/analyze)
 // ────────────────────────────────────────────────────────────
 async function analyzeRecitation() {
   if (!transcribedText.trim()) {
@@ -1255,14 +1226,14 @@ async function analyzeRecitation() {
     return;
   }
 
-  setStatus('⏳ Analyzing recitation across all recognition candidates…', 'analyzing');
+  setStatus('⏳ Analyzing recitation…', 'analyzing');
   document.getElementById('btnAnalyze').disabled = true;
 
   try {
     const body = {
       surah_number:     currentSurahNumber,
       transcribed_text: transcribedText.trim(),
-      alternatives:     allAlternatives,
+      alternatives:     [],          // Whisper single-pass; no alternates
       verse_from:       activeVerseFrom,
       verse_to:         activeVerseTo,
     };
@@ -1284,7 +1255,7 @@ async function analyzeRecitation() {
 }
 
 // ────────────────────────────────────────────────────────────
-// RENDER RESULTS
+// RENDER RESULTS  (identical to original)
 // ────────────────────────────────────────────────────────────
 function renderResults(data) {
   const { match, accuracy } = data;
@@ -1298,16 +1269,8 @@ function renderResults(data) {
     : `Ayah ${match.ayahNumbers[0]}`;
   document.getElementById('resAyahNums').textContent = ayahStr;
 
-  const candEl = document.getElementById('candidateInfo');
-  if (match.totalCandidates > 1) {
-    candEl.style.display = 'block';
-    candEl.textContent   =
-      `🔁 System evaluated ${match.totalCandidates} recognition candidate(s) and selected the best-matching transcript for analysis.`;
-  } else {
-    candEl.style.display = 'none';
-  }
+  document.getElementById('candidateInfo').style.display = 'none';
 
-  // Score circle
   const pct   = accuracy.overall;
   const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red)';
   document.getElementById('scorePct').textContent = pct + '%';
@@ -1327,7 +1290,6 @@ function renderResults(data) {
   document.getElementById('resOriginalText').textContent = accuracy.originalText;
   document.getElementById('resSpokenText').textContent   = accuracy.spokenText;
 
-  // Word table
   const tbody = document.getElementById('wordTableBody');
   tbody.innerHTML = '';
   accuracy.wordComparisons.forEach(w => {
@@ -1356,7 +1318,7 @@ function renderResults(data) {
 }
 
 // ────────────────────────────────────────────────────────────
-// SURAH LOADING / DISPLAY
+// SURAH LOADING / DISPLAY  (identical to original)
 // ────────────────────────────────────────────────────────────
 async function loadSurahs() {
   try {
@@ -1533,8 +1495,10 @@ function hideResults() {
 function resetRecordState() {
   isRecording     = false;
   transcribedText = '';
-  allAlternatives = [];
-  try { if (recognition) recognition.stop(); } catch(_) {}
+  audioChunks     = [];
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    try { mediaRecorder.stop(); } catch(_) {}
+  }
   document.getElementById('btnRecord').classList.remove('recording');
   document.getElementById('recordLabel').textContent     = 'RECORD';
   document.getElementById('waveBars').classList.remove('active');
@@ -1544,6 +1508,7 @@ function resetRecordState() {
   document.getElementById('transcriptBox').style.display = 'none';
   document.getElementById('btnAnalyze').style.display    = 'none';
   document.getElementById('btnAnalyze').disabled         = false;
+  hideWhisperStatus();
 }
 
 function showLoader(msg) {
